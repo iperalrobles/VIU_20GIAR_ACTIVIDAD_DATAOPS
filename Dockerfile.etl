@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY etl/requirements.txt ./etl/requirements.txt
+RUN pip install --no-cache-dir -r etl/requirements.txt
+
+COPY etl/ ./etl/
+RUN mkdir -p /app/data /app/public/data
+
+ENV DB_PATH=/app/data/stocks.db
+ENV JSON_OUTPUT_PATH=/app/public/data/stocks.json
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "-m", "etl.flow"]

@@ -1,0 +1,32 @@
+services:
+  prefect-server:
+    image: prefecthq/prefect:2.19.3-python3.11
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "4200:4200"
+    environment:
+      - PREFECT_UI_ENABLED=true
+      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////prefect/prefect.db
+    volumes:
+      - prefect-data:/prefect
+
+  etl-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.etl
+    depends_on:
+      - prefect-server
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY:-demo}
+      - DB_PATH=/app/data/stocks.db
+      - JSON_OUTPUT_PATH=/app/public/data/stocks.json
+    volumes:
+      - stock-data:/app/data
+      - ./public/data:/app/public/data
+    restart: "no"
+
+volumes:
+  prefect-data:
+  stock-data:
+
