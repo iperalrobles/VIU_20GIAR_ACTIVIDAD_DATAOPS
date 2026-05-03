@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  lint-and-test:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -28,16 +28,26 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: etl/requirements.txt
 
-      - name: Lint
+      - run: npm ci
+      - run: pip install -r etl/requirements.txt
+
+      - name: Frontend lint
         run: npm run lint
 
-      - name: Test
+      - name: Frontend tests
         run: npm run test
 
+      - name: ETL tests
+        run: pytest etl/tests --cov=etl --cov-report=term-missing --cov-fail-under=70
+
   build:
-    needs: lint-and-test
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -47,9 +57,19 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: etl/requirements.txt
 
-      - name: Build
+      - run: npm ci
+      - run: pip install -r etl/requirements.txt
+
+      - name: Generate DataOps dataset
+        run: python -m etl.flow
+
+      - name: Build frontend
         run: npm run build
 
       - uses: actions/upload-pages-artifact@v4

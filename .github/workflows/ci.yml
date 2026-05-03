@@ -7,9 +7,13 @@ on:
   push:
     branches-ignore:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  lint-and-test:
+  frontend:
+    name: Frontend lint and tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -26,3 +30,24 @@ jobs:
 
       - name: Test
         run: npm run test
+
+  etl:
+    name: DataOps ETL tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: etl/requirements.txt
+
+      - name: Install ETL dependencies
+        run: pip install -r etl/requirements.txt
+
+      - name: Run ETL tests with coverage
+        run: pytest etl/tests --cov=etl --cov-report=term-missing --cov-fail-under=70
+
+      - name: Build ETL Docker image
+        run: docker build -f Dockerfile.etl -t financial-dashboard-etl:ci .
