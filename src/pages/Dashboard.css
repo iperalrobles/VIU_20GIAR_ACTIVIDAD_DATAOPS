@@ -23,3 +23,9 @@
   flex-direction: column;
   gap: 24px;
 }
+
+.data-source {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
