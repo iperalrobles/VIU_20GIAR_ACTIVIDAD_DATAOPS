@@ -1,0 +1,24 @@
+.range-selector {
+  display: flex;
+  gap: 4px;
+}
+
+.range-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.range-btn:hover {
+  background: var(--accent-bg);
+}
+
+.range-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
