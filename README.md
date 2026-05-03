@@ -1,122 +1,117 @@
-# VIU 20GIAR - Actividad
+# Financial Dashboard DataOps
 
-Proyecto de Metodologías de Desarrollo y Despliegue de Aplicaciones para Ciencia de Datos.
+Proyecto para la asignatura **Metodologias de Desarrollo y Despliegue de Aplicaciones para Ciencia de Datos** del Master en Data Analytics.
 
-## Actividad solicitada
+La aplicacion combina una SPA de React + Vite con un pipeline DataOps en Python. El pipeline extrae datos financieros, los transforma, valida su calidad y publica un dataset JSON que alimenta el dashboard.
 
-La presentación debe cubrir los siguientes puntos:
+## Objetivo
 
-### 1. Introducción (2 min)
-- Nombre del proyecto y equipo
-- Problema que resuelve
-- Tecnologías principales usadas
+Automatizar el flujo de datos de un dashboard financiero para evitar que el navegador dependa directamente de la API externa. La app puede seguir usando Alpha Vantage o datos mock como fallback, pero la fuente principal es el dataset procesado por el ETL.
 
-### 2. Arquitectura del Sistema (3 min)
-- Diagrama de arquitectura (obligatorio)
-- Flujo de datos desde la fuente hasta el consumidor
-- Decisiones de diseño y por qué se tomaron
+## Arquitectura DataOps
 
-### 3. Implementación (5 min)
-- Demostración en vivo del pipeline funcionando
-- Código más relevante (2-3 snippets)
-- Dificultades encontradas y cómo se resolvieron
+```mermaid
+graph LR
+    API[Alpha Vantage API] --> Extract[Extract - Python]
+    Mock[Mock determinista] --> Extract
+    Extract --> Transform[Transform - metricas financieras]
+    Transform --> Validate[Validate - calidad de datos]
+    Validate --> SQLite[(SQLite auditable)]
+    Validate --> JSON[public/data/stocks.json]
+    JSON --> React[React + Vite Dashboard]
+    React --> User[Usuario]
+```
 
-### 4. Metodología Ágil Aplicada (2 min)
-- Cómo se organizó el trabajo (SCRUM/Kanban)
-- Sprints completados y backlog
-- Velocidad del equipo y retrospectiva
+## Flujo ETL
 
-### 5. Resultados y Métricas (3 min)
-- Métricas de negocio y técnicas alcanzadas
-- Qué funciona, qué falta, qué se mejoraría
-- Comparación con el plan inicial
+1. **Extract:** obtiene precios diarios de Alpha Vantage. Si no hay API key, falla la red o se supera el limite, usa datos mock deterministas.
+2. **Transform:** normaliza tipos y calcula `daily_return`, `price_range`, `ma_7` y `ma_30`.
+3. **Validate:** comprueba columnas obligatorias, precios positivos, volumen no negativo, fechas no duplicadas y coherencia `high >= low`.
+4. **Load:** guarda una copia en SQLite y publica `public/data/stocks.json` para el frontend.
 
-### 6. Conclusiones (2 min)
-- Aprendizajes principales
-- Próximos pasos si se continuara el proyecto
+## Tecnologias
 
----
+| Area | Tecnologia |
+| --- | --- |
+| Frontend | React 19, Vite 8, React Router, Recharts |
+| Testing frontend | Vitest, React Testing Library |
+| DataOps | Python 3.11, Prefect, pandas |
+| Persistencia | SQLite y JSON estatico |
+| CI/CD | GitHub Actions |
+| Contenedores | Docker, Docker Compose |
+| Infraestructura | Terraform / AWS como despliegue objetivo |
 
-## Sobre el proyecto
+## Ejecucion local
 
-### Financial Dashboard
-
-Aplicación web de tipo Single Page Application (SPA) que muestra un dashboard financiero de stocks. Permite al usuario autenticarse con credenciales predefinidas y visualizar gráficos de precios y volumen de acciones, con filtros por ticker y rango temporal.
-
-Los datos se obtienen de la API gratuita de Alpha Vantage, con datos mock como fallback.
-
-### Tecnologías
-
-- **Frontend:** React + Vite
-- **Gráficos:** Recharts
-- **Datos:** Alpha Vantage API
-- **Hosting:** GitHub Pages (SPA estática)
-
-### Metodología
-
-El trabajo se organiza utilizando **Kanban** con tickets gestionados en [Trello](https://trello.com/b/tBDHhGKS/dashboard-financiero-kanban). Cada ticket representa una unidad de trabajo independiente que se desarrolla en su propia feature branch y se integra a `main` mediante Pull Requests con revisión obligatoria.
-
-### Pipelines CI/CD
-
-El proyecto cuenta con dos pipelines de GitHub Actions:
-
-- **CI (feature branches):** Se ejecuta en cada push a ramas de feature. Corre linting (ESLint) y tests (Vitest) automáticamente. El PR no puede mergearse si el pipeline falla.
-- **CD (main):** Se ejecuta en cada merge a `main`. Hace build de producción y despliega automáticamente a GitHub Pages.
-
----
-
-## Uso del Dashboard
-
-### Acceso
-
-La aplicación está desplegada en: https://mmarmol.github.io/VIU_20GIAR_ACTIVIDAD/
-
-**Credenciales de acceso:**
-
-| Campo | Valor |
-|-------|-------|
-| Usuario | `administrador` |
-| Contraseña | `viu2026` |
-
-### Funcionalidades
-
-Al iniciar sesión se accede al dashboard financiero con las siguientes funcionalidades:
-
-**Gráfico de precio de cierre:** Gráfico de línea temporal que muestra la evolución del precio de cierre de la acción seleccionada. Incluye tooltip interactivo que muestra fecha y precio al pasar el cursor.
-
-**Gráfico de volumen de operaciones:** Gráfico de barras que muestra el volumen diario de operaciones de la acción seleccionada. El eje Y está formateado en millones (M).
-
-**Filtro por ticker:** Selector desplegable para elegir entre las acciones disponibles:
-- AAPL (Apple)
-- GOOGL (Google)
-- MSFT (Microsoft)
-- AMZN (Amazon)
-- TSLA (Tesla)
-
-**Filtro por rango temporal:** Botones para filtrar el periodo de datos visualizado:
-- 1S (1 semana)
-- 1M (1 mes)
-- 3M (3 meses) - seleccionado por defecto
-- 6M (6 meses)
-- 1A (1 año)
-
-**Cerrar sesión:** Botón en la esquina superior derecha que cierra la sesión y redirige a la pantalla de login.
-
-### Datos
-
-Los datos se obtienen de la API de Alpha Vantage (tier gratuito, 25 requests/día). Cuando la API no está disponible o se excede el límite, la aplicación utiliza datos mock generados automáticamente que simulan un año de cotizaciones.
-
-### Ejecución local
+### Frontend
 
 ```bash
-git clone https://github.com/mmarmol/VIU_20GIAR_ACTIVIDAD.git
-cd VIU_20GIAR_ACTIVIDAD
 npm install
 npm run dev
 ```
 
-La aplicación estará disponible en `http://localhost:5173`
+La aplicacion se abre en `http://localhost:5173`.
 
-### Documentación adicional
+Credenciales de demo:
 
-- [ARQUITECTURA.md](ARQUITECTURA.md) - Arquitectura del sistema, decisiones de diseño y diagramas
+| Usuario | Password |
+| --- | --- |
+| `administrador` | `viu2026` |
+
+### Pipeline ETL
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r etl/requirements.txt
+python -m etl.flow
+```
+
+El comando genera:
+
+- `data/stocks.db`: copia SQLite para trazabilidad.
+- `public/data/stocks.json`: dataset validado que consume React.
+
+### Docker
+
+```bash
+docker compose up --build
+```
+
+Esto levanta Prefect UI en `http://localhost:4200` y ejecuta el contenedor ETL.
+
+## Tests
+
+```bash
+npm run test
+pytest etl/tests --cov=etl --cov-report=term-missing --cov-fail-under=70
+```
+
+La cobertura minima del ETL es del 70%, como exige el enunciado.
+
+## CI/CD
+
+- **CI:** en ramas de trabajo y pull requests ejecuta lint/test frontend, tests ETL con cobertura y build de la imagen Docker ETL.
+- **CD:** en `main` valida el proyecto, ejecuta el ETL para generar `public/data/stocks.json`, construye React y despliega GitHub Pages.
+
+## Tickers disponibles
+
+- AAPL
+- GOOGL
+- MSFT
+- AMZN
+- TSLA
+
+## Metodologia agil
+
+El proyecto puede documentarse con Scrum/Kanban en tres sprints:
+
+| Sprint | Objetivo | Resultado |
+| --- | --- | --- |
+| Sprint 1 | Dashboard base y autenticacion | Login, rutas protegidas, graficos y filtros |
+| Sprint 2 | Pipeline DataOps | ETL, validaciones, SQLite, JSON para frontend |
+| Sprint 3 | Industrializacion | Docker, CI/CD, documentacion y despliegue |
+
+## Reproducibilidad
+
+El dashboard funciona aunque Alpha Vantage no responda porque el ETL incluye datos mock deterministas. Esto permite ejecutar tests, demos y despliegues sin depender del limite gratuito de la API.

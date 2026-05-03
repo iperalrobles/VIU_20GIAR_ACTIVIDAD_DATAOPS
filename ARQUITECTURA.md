@@ -1,146 +1,134 @@
-# Arquitectura - Financial Dashboard
+# Arquitectura - Financial Dashboard DataOps
 
 ## Descripcion general
 
-Financial Dashboard es una Single Page Application (SPA) construida con React y Vite, desplegada en GitHub Pages. Permite visualizar datos financieros de acciones (stocks) con graficos interactivos y filtros.
+Financial Dashboard DataOps es una Single Page Application construida con React y Vite que muestra un dashboard financiero con login, filtros de ticker y graficos interactivos. La aplicacion se alimenta prioritariamente de un dataset generado por un pipeline DataOps en Python.
 
-La aplicacion es completamente estatica (sin backend). Los datos se obtienen desde la API de Alpha Vantage en el navegador del usuario, con datos mock como fallback.
+El cambio principal respecto a una SPA puramente estatica es que la obtencion y preparacion de datos se mueve fuera del navegador. El pipeline extrae datos, los transforma, valida su calidad y publica un JSON listo para el frontend.
 
 ## Diagrama de arquitectura
 
 ```mermaid
 graph TB
-    subgraph "GitHub Pages"
-        SPA[SPA React + Vite]
-    end
-
-    subgraph "Navegador del usuario"
-        Login[Pantalla de Login]
-        Auth[AuthContext - Sesion]
-        Router[React Router - HashRouter]
-        Dashboard[Dashboard]
-        Filters[Filtros - Ticker + Rango]
-        PriceChart[Grafico de Precio]
-        VolumeChart[Grafico de Volumen]
-    end
-
-    subgraph "Datos"
+    subgraph "Fuentes"
         API[Alpha Vantage API]
-        Mock[Mock Data - Fallback]
+        Mock[Mock determinista]
     end
 
-    SPA --> Router
-    Router --> Login
-    Router -->|Autenticado| Dashboard
+    subgraph "Pipeline DataOps"
+        Extract[Extract]
+        Transform[Transform]
+        Validate[Validate]
+        SQLite[(SQLite)]
+        Dataset[stocks.json]
+    end
+
+    subgraph "GitHub Pages"
+        SPA[React + Vite SPA]
+    end
+
+    subgraph "Navegador"
+        Login[Pantalla de Login]
+        Auth[AuthContext]
+        Dashboard[Dashboard]
+        Charts[Graficos Recharts]
+    end
+
+    API --> Extract
+    Mock --> Extract
+    Extract --> Transform
+    Transform --> Validate
+    Validate --> SQLite
+    Validate --> Dataset
+    Dataset --> SPA
+    SPA --> Login
     Login --> Auth
-    Dashboard --> Filters
-    Dashboard --> PriceChart
-    Dashboard --> VolumeChart
-    Filters -->|Ticker + Rango| PriceChart
-    Filters -->|Ticker + Rango| VolumeChart
-    PriceChart --> API
-    API -->|Error / Limite| Mock
+    Auth --> Dashboard
+    Dashboard --> Charts
 ```
 
 ## Flujo de datos
 
 ```mermaid
 sequenceDiagram
+    participant Scheduler as GitHub Actions / Docker
+    participant ETL as Prefect ETL
+    participant API as Alpha Vantage
+    participant DB as SQLite
+    participant JSON as stocks.json
+    participant React as Dashboard React
     actor User
-    participant Login
-    participant AuthContext
-    participant Dashboard
-    participant StockService
-    participant AlphaVantage
-    participant MockData
 
-    User->>Login: Ingresa usuario y password
-    Login->>AuthContext: Validar credenciales
-    AuthContext-->>Login: OK / Error
-    Login-->>User: Redirige al Dashboard / Muestra error
-
-    User->>Dashboard: Selecciona ticker y rango
-    Dashboard->>StockService: getStockData(ticker)
-    StockService->>AlphaVantage: GET /query?function=TIME_SERIES_DAILY
-    alt API responde OK
-        AlphaVantage-->>StockService: Datos JSON
-    else API falla o limite excedido
-        StockService->>MockData: Cargar datos locales
-        MockData-->>StockService: Datos mock
+    Scheduler->>ETL: Ejecuta financial_etl_pipeline
+    ETL->>API: Solicita TIME_SERIES_DAILY por ticker
+    alt API disponible
+        API-->>ETL: Datos diarios
+    else API no disponible o limite excedido
+        ETL->>ETL: Genera mock determinista
     end
-    StockService-->>Dashboard: { data, source }
-    Dashboard->>Dashboard: Filtrar por rango temporal
-    Dashboard->>Dashboard: Renderizar graficos
+    ETL->>ETL: Normaliza y calcula metricas
+    ETL->>ETL: Valida calidad de datos
+    ETL->>DB: Guarda copia auditable
+    ETL->>JSON: Publica dataset frontend
+    User->>React: Accede al dashboard
+    React->>JSON: Carga datos procesados
+    React-->>User: Renderiza precio y volumen
 ```
 
-## Estructura del proyecto
+## Estructura relevante
 
-```
+```text
+etl/
+  flow.py                 Pipeline Extract, Transform, Validate, Load
+  requirements.txt        Dependencias Python
+  tests/test_flow.py      Tests del pipeline con cobertura
+public/data/
+  stocks.json             Dataset generado para el dashboard
 src/
-  components/          Componentes reutilizables
-    Navbar.jsx         Barra de navegacion con logout
-    PriceChart.jsx     Grafico de linea (precio de cierre)
-    VolumeChart.jsx    Grafico de barras (volumen)
-    TickerSelector.jsx Selector de ticker (AAPL, GOOGL, etc)
-    RangeSelector.jsx  Botones de rango temporal (1S, 1M, 3M, 6M, 1A)
-    ProtectedRoute.jsx Proteccion de rutas privadas
-  pages/               Paginas de la aplicacion
-    Login.jsx          Pantalla de login
-    Dashboard.jsx      Dashboard principal con graficos y filtros
-  context/             Estado global
-    AuthContext.jsx     Proveedor de autenticacion
-    auth-context.js    Definicion del contexto
-    useAuth.js         Hook para acceder al contexto de auth
-  services/            Logica de datos
-    stockService.js    Servicio que consulta Alpha Vantage o mock
-    mockData.js        Datos mock para 5 tickers
-  test/                Configuracion de tests
-    setup.js           Setup de jest-dom
+  services/stockService.js Lee stocks.json y usa API/mock como fallback
+  pages/Dashboard.jsx     Dashboard financiero
+.github/workflows/
+  ci.yml                  Validacion frontend + ETL
+  deploy.yml              Generacion dataset + build + GitHub Pages
+Dockerfile.etl            Imagen del pipeline
+Docker-compose.yml        Prefect server + worker ETL
 ```
 
 ## Decisiones de diseno
 
-| Decision | Alternativa | Por que |
-|----------|-------------|---------|
-| React + Vite | Next.js, CRA | No necesitamos SSR. Vite es mas rapido para desarrollo y build |
-| HashRouter | BrowserRouter | GitHub Pages no soporta rutas SPA con BrowserRouter |
-| Recharts | Chart.js, D3 | API declarativa que encaja con React, facil de usar |
-| Alpha Vantage | Yahoo Finance, Finnhub | API gratuita con datos diarios, no requiere registrar app |
-| Mock data como fallback | Solo API | El tier gratuito tiene limite de 25 req/dia, mock garantiza que la demo siempre funcione |
-| sessionStorage | localStorage | La sesion se limpia al cerrar el navegador, mas seguro para credenciales hardcodeadas |
-| Context API | Redux, Zustand | Para un solo estado global (auth) no se justifica una libreria externa |
+| Decision | Alternativa | Justificacion |
+| --- | --- | --- |
+| Prefect | Airflow | Menor complejidad operativa y suficiente para un ETL academico |
+| JSON estatico | API backend | Compatible con GitHub Pages y facil de reproducir |
+| SQLite | PostgreSQL | Trazabilidad local sin levantar infraestructura extra |
+| Mock determinista | Mock aleatorio | Tests y demos reproducibles |
+| React + Vite | Next.js | No se necesita SSR ni backend Node |
+| HashRouter | BrowserRouter | Evita problemas de rutas en GitHub Pages |
+| Docker Compose | Kubernetes | Complejidad adecuada para el alcance de la practica |
 
-## Pipelines CI/CD
+## Calidad de datos
+
+El pipeline valida:
+
+- columnas obligatorias;
+- dataset no vacio;
+- fechas no duplicadas por ticker;
+- precios positivos;
+- `high >= low`;
+- volumen no negativo.
+
+## CI/CD
 
 ```mermaid
 graph LR
-    subgraph "CI - Feature branches"
-        Push[Push a cualquier branch] --> Lint[ESLint]
-        Lint --> Tests[Vitest]
-        Tests -->|Falla| Reject[Build rechazado]
-        Tests -->|Pasa| OK[Check verde]
-    end
-
-    subgraph "CD - main"
-        Merge[Merge a main] --> Lint2[ESLint]
-        Lint2 --> Tests2[Vitest]
-        Tests2 --> Build[npm run build]
-        Build --> Deploy[GitHub Pages]
-    end
+    Push[Push / Pull Request] --> Front[Lint + tests React]
+    Push --> ETLTests[Tests ETL + cobertura]
+    ETLTests --> Docker[Build Docker ETL]
+    Main[Merge a main] --> Generate[Generar stocks.json]
+    Generate --> Build[Build React]
+    Build --> Pages[Deploy GitHub Pages]
 ```
 
-Los pipelines estan documentados en detalle en [CI_CD_GUIDE.md](CI_CD_GUIDE.md).
+## Despliegue objetivo AWS
 
-## Tecnologias
-
-| Tecnologia | Version | Uso |
-|------------|---------|-----|
-| React | 19 | Framework UI |
-| Vite | 8 | Build tool y dev server |
-| React Router | 7 | Routing SPA |
-| Recharts | 3 | Graficos |
-| Vitest | 4 | Testing |
-| React Testing Library | 16 | Testing de componentes |
-| ESLint | 10 | Linting |
-| GitHub Actions | - | CI/CD |
-| GitHub Pages | - | Hosting |
+La carpeta `infrastructure/` se reserva para el despliegue objetivo en AWS mediante Terraform. La arquitectura propuesta es ejecutar el pipeline en una instancia EC2 o tarea programada y publicar el dataset resultante para que el dashboard lo consuma.
