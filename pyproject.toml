@@ -1,0 +1,13 @@
+[tool.pytest.ini_options]
+testpaths = ["etl/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+source = ["etl"]
+omit = ["etl/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 70
