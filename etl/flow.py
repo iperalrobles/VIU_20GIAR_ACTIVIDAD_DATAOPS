@@ -7,6 +7,7 @@ SQLite copy for traceability, and publishes a frontend-ready JSON dataset.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import random
 import sqlite3
@@ -52,6 +53,13 @@ JSON_OUTPUT_PATH = Path(os.getenv("JSON_OUTPUT_PATH", "public/data/stocks.json")
 API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "demo")
 
 
+def _get_logger() -> logging.Logger:
+    try:
+        return get_run_logger()
+    except Exception:
+        return logging.getLogger("etl.flow")
+
+
 def _mock_data(ticker: str, days: int = 140) -> dict[str, Any]:
     """Generate deterministic market-like data for reproducible demos/tests."""
     seed = sum(ord(char) for char in ticker)
@@ -89,7 +97,7 @@ def _mock_data(ticker: str, days: int = 140) -> dict[str, Any]:
 @task(name="extract_ticker", retries=2, retry_delay_seconds=10)
 def extract_ticker(ticker: str) -> dict[str, Any]:
     """Download daily market data from Alpha Vantage or fall back to mock data."""
-    logger = get_run_logger()
+    logger = _get_logger()
     logger.info(f"Extracting stock prices for {ticker}")
     params = urlencode(
         {
